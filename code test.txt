@@ -1,0 +1,431 @@
+1.Amend the lambda function so that “id” and “Weather” are passed into the function in some JSON in the request body, rather than being hardcoded.
+
+import json
+
+def lambda_handler(event, context):
+# Extracting parameters from the request body
+    body = json.loads(event['body'])
+    id = body['id']
+    weather = body['Weather']
+    print("Received id:", id)
+    print("Received Weather:", weather)
+    # Returning a response
+    response = {
+        "statusCode": 200,
+        "body": json.dumps({"message": "Parameters received successfully"})
+    }
+    
+    return response
+{
+    "id": "your_id",
+    "Weather": "Winter"
+}
+
+2.Add a validation that “id” and “Weather” are in the request body before updating DynamoDB. An error message should be returned if either attribute is missing.
+
+
+
+import json
+
+def lambda_handler(event, context):
+    # if the request body exists
+    if 'body' in event:
+        body = json.loads(event['body'])
+        # if both "id" and "Weather" are present in the request body
+        if 'id' in body and 'Weather' in body:
+            id = body['id']
+            weather = body['Weather']
+            
+            # Validating id and Weather presence before updating DynamoDB
+            if id.strip() and weather.strip():
+                print("Received id:", id)
+                print("Received Weather:", weather)
+                
+                # Returning a success response
+                return {
+                    "statusCode": 200,
+                    "body": json.dumps({"message": "Parameters received and DynamoDB updated successfully"})
+                }
+            else:
+                # If id or Weather is empty
+                return {
+                    "statusCode": 400,
+                    "body": json.dumps({"error": "id or Weather cannot be empty"})
+                }
+    
+    # If 'id' or 'Weather' is missing from the request body
+    return {
+        "statusCode": 400,
+        "body": json.dumps({"error": "Missing 'id' or 'Weather' in the request body"})
+    }
+
+
+3.Add a validation that “id” and “Weather” are the only attributes in the request body. An error message should be returned if any other attributes are present.
+
+import json
+
+def lambda_handler(event, context):
+    # if the request body exists
+    if 'body' in event:
+        body = json.loads(event['body'])
+        # if both "id" and "Weather" are present in the request body
+        if 'id' in body and 'Weather' in body:
+            id = body['id']
+            weather = body['Weather']
+            
+            # Validating id and Weather presence before updating DynamoDB
+            if id.strip() and weather.strip():
+                # if there are only "id" and "Weather" attributes in the request body
+                if len(body.keys()) == 2 and all(key in ['id', 'Weather'] for key in body.keys()):
+                   
+                    print("Received id:", id)
+                    print("Received Weather:", weather)
+                    
+                    # Returning a success response
+                    return {
+                        "statusCode": 200,
+                        "body": json.dumps({"message": "Parameters received and DynamoDB updated successfully"})
+                    }
+                else:
+                    # If there are other attributes besides "id" and "Weather"
+                    return {
+                        "statusCode": 400,
+                        "body": json.dumps({"error": "Only 'id' and 'Weather' attributes are allowed in the request body"})
+                    }
+            else:
+                # If id or Weather is empty
+                return {
+                    "statusCode": 400,
+                    "body": json.dumps({"error": "id or Weather cannot be empty"})
+                }
+    
+    # If 'id' or 'Weather' is missing from the request body
+    return {
+        "statusCode": 400,
+        "body": json.dumps({"error": "Missing 'id' or 'Weather' in the request body"})
+    }
+
+4.Add a unit test for the lambda function that tests a successful update and the two validations that have been added.
+import unittest
+from lambda_function import lambda_handler
+
+class TestLambdaFunction(unittest.TestCase):
+    def test_successful_update(self):
+        # Creating a sample event with id and Weather attributes
+        event = {
+            'body': '{"id": "123", "Weather": "Winter"}'
+        }
+        
+        # Invoking the Lambda function
+        response = lambda_handler(event, None)
+        
+        # Asserting that the response status code is 200
+        self.assertEqual(response['statusCode'], 200)
+        
+    def test_missing_id_or_weather(self):
+        # Testing when id attribute is missing
+        event_missing_id = {
+            'body': '{"Weather": "Winter"}'
+        }
+        response_missing_id = lambda_handler(event_missing_id, None)
+        self.assertEqual(response_missing_id['statusCode'], 400)
+        
+        # Testing when Weather attribute is missing
+        event_missing_weather = {
+            'body': '{"id": "123"}'
+        }
+        response_missing_weather = lambda_handler(event_missing_weather, None)
+        self.assertEqual(response_missing_weather['statusCode'], 400)
+        
+    def test_extra_attributes(self):
+        # Testing when extra attributes are present
+        event_extra_attributes = {
+            'body': '{"id": "123", "Weather": "Winter", "temperature": "25C"}'
+        }
+        response_extra_attributes = lambda_handler(event_extra_attributes, None)
+        self.assertEqual(response_extra_attributes['statusCode'], 400)
+
+if __name__ == '__main__':
+    unittest.main()
+
+5.The unit test needs to be repeatable and can be executed automatically using pytest. Examples of good unit tests can be found here https://github.com/aws-samples/serverless-test-samples/tree/main/python-test-samples/apigw-lambda-dynamodb.
+
+import json
+import pytest
+from lambda_function import lambda_handler
+
+@pytest.fixture()
+def apigw_event():
+    """ Generates API Gateway Event"""
+    return {
+        "body": '{"id": "123", "Weather": "sunny"}'
+    }
+
+def test_lambda_handler(apigw_event):
+    ret = lambda_handler(apigw_event, None)
+
+    assert ret['statusCode'] == 200
+    assert 'message' in ret['body']
+
+def test_lambda_handler_missing_id(apigw_event):
+    del apigw_event['body']['id']
+    ret = lambda_handler(apigw_event, None)
+
+    assert ret['statusCode'] == 400
+    assert 'error' in ret['body']
+
+def test_lambda_handler_missing_weather(apigw_event):
+    del apigw_event['body']['Weather']
+    ret = lambda_handler(apigw_event, None)
+
+    assert ret['statusCode'] == 400
+    assert 'error' in ret['body']
+
+def test_lambda_handler_extra_attributes(apigw_event):
+    apigw_event['body']['temperature'] = '25C'
+    ret = lambda_handler(apigw_event, None)
+
+    assert ret['statusCode'] == 400
+    assert 'error' in ret['body']
+
+
+6.Add a second lambda function that can be used to delete a record from the DynamoDB table.
+
+import boto3
+import json
+
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('YourDynamoDBTableName')
+
+def lambda_handler(event, context):
+    # Extracting parameters from the request body
+    if 'body' in event:
+        body = json.loads(event['body'])
+        if 'id' in body:
+            id = body['id']
+            
+            # Deleting the record from DynamoDB
+            try:
+                response = table.delete_item(
+                    Key={
+                        'id': id
+                    }
+                )
+                print("Item deleted successfully:", response)
+                return {
+                    "statusCode": 200,
+                    "body": json.dumps({"message": "Record deleted successfully"})
+                }
+            except Exception as e:
+                print("Error deleting item:", e)
+                return {
+                    "statusCode": 500,
+                    "body": json.dumps({"error": "Error deleting record from DynamoDB"})
+                }
+    
+    # If 'id' is missing from the request body
+    return {
+        "statusCode": 400,
+        "body": json.dumps({"error": "Missing 'id' in the request body"})
+    }
+
+7.This lambda function should be added to template.yaml. It should use HTTP method DELETE.
+
+/books/{id}:
+            delete:
+              responses:
+                "200":
+                  description: 200 response
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Sub: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${BookDelete.Arn}/invocations"
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                passthroughBehavior: when_no_match
+                httpMethod: POST #always POST
+                type: aws_proxy
+
+8.Add an authorizer to the API. This should be a simple token-based authorizer that will allow access if the bearer token “allowme” is passed with the HTTP request.
+
+Resources:
+  MyApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Auth:
+        Authorizers:
+          MyTokenAuthorizer:
+            Type: TOKEN
+            IdentitySource: method.request.header.Authorization
+            AuthorizerResultTtlInSeconds: 300
+            AuthorizerPayloadFormatVersion: "2.0"
+            AuthorizerFunctionId: MyTokenAuthorizerFunction
+
+  MyTokenAuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: token_authorizer.lambda_handler
+      Runtime: python3.8
+      Environment:
+        Variables:
+          AUTH_TOKEN: allowme
+
+9.Access should be denied if this token is not passed with the HTTP request.
+
+import json
+import os
+
+def lambda_handler(event, context):
+    # Get the expected token from environment variables
+    expected_token = os.environ.get('AUTH_TOKEN')
+
+    # Extract the bearer token from the Authorization header
+    if 'authorization' in event['headers']:
+        bearer_token = event['headers']['authorization']
+        if bearer_token.startswith('Bearer '):
+            provided_token = bearer_token.split(' ')[1]
+        else:
+            provided_token = bearer_token
+    else:
+        provided_token = None
+
+    # Compare the provided token with the expected token
+    if provided_token == expected_token:
+        # Token is valid, allow access
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"message": "Authorized"})
+        }
+    else:
+        # Token is missing or incorrect, deny access
+        return {
+            "statusCode": 401,
+            "body": json.dumps({"error": "Unauthorized"})
+        }
+
+10.Use Python for the lambda function code.
+
+add = lambda x, y: x + y
+print(add(3, 5)).
+
+11.Amend the DynamoDB table definition to set a partition key of ‘id’ (string) and enable deletion protection.
+
+import boto3
+
+# Create DynamoDB client
+dynamodb = boto3.client('dynamodb')
+
+# Define table name
+table_name = 'YourTableName'
+
+# Define table schema
+table_schema = [
+    {
+        'AttributeName': 'id',
+        'KeyType': 'HASH'  # Partition key
+    }
+]
+
+# Define table settings
+table_settings = {
+    'TableName': table_name,
+    'KeySchema': table_schema,
+    'AttributeDefinitions': [
+        {
+            'AttributeName': 'id',
+            'AttributeType': 'S'  # String
+        }
+    ],
+    'BillingMode': 'PAY_PER_REQUEST',  # You can change this if needed
+    'SSESpecification': {
+        'Enabled': False  # Change to True if you need server-side encryption
+    },
+    'StreamSpecification': {
+        'StreamEnabled': False
+    },
+    'Tags': [],  # Add tags if needed
+    'PointInTimeRecoverySpecification': {
+        'PointInTimeRecoveryEnabled': False
+    },
+    'TimeToLiveSpecification': {
+        'Enabled': False
+    },
+    'GlobalSecondaryIndexes': [],
+    'LocalSecondaryIndexes': [],
+    'BillingModeOverride': 'PAY_PER_REQUEST',  # You can change this if needed
+    'ReplicaUpdates': [],
+    'DeletionProtection': True  # Enable deletion protection
+}
+
+# Create table
+response = dynamodb.create_table(**table_settings)
+
+print("Table created successfully:", response).
+
+12.o   Allow methods OPTIONS, GET, POST and DELETE 
+o   Allow headers of Content-Type, X-Amz-Date, Authorization and X-Api-Key
+o   Allow any origin.
+
+from django.http import JsonResponse
+
+def example_view(request):
+    if request.method == 'GET':
+        # Handle GET request
+        return JsonResponse({'message': 'This is a GET request'})
+    elif request.method == 'POST':
+        # Handle POST request
+        return JsonResponse({'message': 'This is a POST request'})
+    elif request.method == 'DELETE':
+        # Handle DELETE request
+        return JsonResponse({'message': 'This is a DELETE request'})
+    elif request.method == 'OPTIONS':
+        # Handle OPTIONS request (for CORS)
+        response = JsonResponse({'message': 'OPTIONS request handled'})
+        response['Access-Control-Allow-Origin'] = '*'  # Allow any origin
+        response['Access-Control-Allow-Methods'] = 'OPTIONS, GET, POST, DELETE'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, X-Amz-Date, Authorization, X-Api-Key'
+        return response
+    else:
+        # Return 405 Method Not Allowed for unsupported methods
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+13.Amend the Lambda functions to reference an environment variable for the DynamoDB table name (passed from template.yaml) instead of using a hard-coded name.
+
+import os
+import boto3
+
+# Read DynamoDB table name from environment variable
+dynamodb_table_name = os.environ['DYNAMODB_TABLE_NAME']
+
+# Create DynamoDB client
+dynamodb = boto3.client('dynamodb')
+
+def lambda_handler(event, context):
+    # Your Lambda function logic here
+    # You can now use dynamodb_table_name variable to reference the DynamoDB table
+    
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Hello from Lambda!')
+    }
+Resources:
+  MyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.8
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref DynamoDBTableName
+      ...
+
+
+
+
+
